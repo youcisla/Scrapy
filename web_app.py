@@ -110,6 +110,53 @@ def get_top_videos(n):
     
     return jsonify(videos_sorted[:n])
 
+@app.route('/api/scrape', methods=['POST'])
+def start_scraping():
+    """API pour lancer le scraping"""
+    import subprocess
+    import sys
+    
+    try:
+        # Lancer le scraping en arrière-plan
+        python_exe = sys.executable
+        result = subprocess.Popen(
+            [python_exe, '-m', 'scrapy', 'crawl', 'youtube_trends', '-o', 'tendances_youtube.json'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        
+        return jsonify({
+            'status': 'started',
+            'message': 'Scraping lance avec succes',
+            'pid': result.pid
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/scrape/status')
+def scraping_status():
+    """API pour vérifier si un scraping est en cours"""
+    import psutil
+    
+    # Chercher les processus scrapy
+    scraping = False
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            cmdline = proc.info['cmdline']
+            if cmdline and 'scrapy' in ' '.join(cmdline):
+                scraping = True
+                break
+        except:
+            pass
+    
+    return jsonify({
+        'scraping': scraping,
+        'videos_count': len(charger_donnees())
+    })
+
 if __name__ == '__main__':
     print("=" * 80)
     print("Serveur web demarre sur http://localhost:5000")

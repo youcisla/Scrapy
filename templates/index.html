@@ -214,7 +214,15 @@
         
         <div class="videos-section">
             <h2 class="section-title">Top 20 des Videos (Score Psychologique)</h2>
-            <button class="refresh-btn" onclick="loadData()">Actualiser</button>
+            <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;">
+                <button class="refresh-btn" onclick="startScraping()">Lancer le Scraping</button>
+                <button class="refresh-btn" onclick="loadData()">Actualiser</button>
+            </div>
+            <div id="scraping-status" style="text-align: center; margin-bottom: 20px; display: none;">
+                <div style="background: #fbbf24; color: #78350f; padding: 15px; border-radius: 10px; display: inline-block;">
+                    <span style="font-size: 1.2em;">⏳ Scraping en cours...</span>
+                </div>
+            </div>
             <div id="videos-container">
                 <div class="loading">Chargement des videos...</div>
             </div>
@@ -335,6 +343,44 @@
         
         async function loadData() {
             await Promise.all([loadStats(), loadVideos()]);
+        }
+        
+        async function startScraping() {
+            const statusDiv = document.getElementById('scraping-status');
+            const videosDiv = document.getElementById('videos-container');
+            
+            try {
+                statusDiv.style.display = 'block';
+                videosDiv.innerHTML = '<div class="loading">Scraping en cours, veuillez patienter...</div>';
+                
+                const response = await fetch('/api/scrape', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.status === 'started') {
+                    // Vérifier le statut toutes les 2 secondes
+                    const checkInterval = setInterval(async () => {
+                        const statusResponse = await fetch('/api/scrape/status');
+                        const statusData = await statusResponse.json();
+                        
+                        if (!statusData.scraping) {
+                            clearInterval(checkInterval);
+                            statusDiv.style.display = 'none';
+                            await loadData();
+                        }
+                    }, 2000);
+                } else {
+                    statusDiv.style.display = 'none';
+                    alert('Erreur: ' + data.message);
+                    await loadData();
+                }
+            } catch (error) {
+                console.error('Erreur scraping:', error);
+                statusDiv.style.display = 'none';
+                alert('Erreur lors du lancement du scraping');
+                await loadData();
+            }
         }
         
         // Charger les données au démarrage
