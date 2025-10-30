@@ -1,0 +1,25 @@
+# Dependencies pour le projet d'analyse des titres YouTube
+# Python 3.10+
+
+# Framework de scraping
+scrapy>=2.11.0
+
+# Parsing HTML
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# Base de donnees MongoDB
+pymongo>=4.6.0
+
+# Utilitaires
+python-dateutil>=2.8.0
+
+# === OPTIONNEL : Traitement du langage naturel (NLP) ===
+# spaCy necessite des outils de compilation C++ sur Windows
+# Si vous avez Visual Studio Build Tools, installez avec :
+#   pip install spacy
+#   python -m spacy download fr_core_news_sm
+# 
+# Le projet fonctionne sans spaCy avec des features NLP basiques (regex)
+# Pour installer Visual Studio Build Tools :
+# https://visualstudio.microsoft.com/visual-cpp-build-tools/

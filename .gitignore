@@ -1,0 +1,83 @@
+# Fichier .gitignore pour le projet YouTube Title Psychology
+
+# Fichiers Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Scrapy
+.scrapy/
+*.log
+
+# Cache HTTP Scrapy
+httpcache/
+
+# Exports de donnees (ne pas versionner les donnees scrapees)
+*.json
+*.csv
+*.xml
+*.jl
+tendances_youtube.json
+tendances.csv
+
+# Fichiers de configuration sensibles
+.env
+secrets.py
+credentials.json
+config.ini
+
+# IDEs et editeurs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.vs/
+
+# Modeles spaCy (peuvent etre gros)
+# Decommenter si vous ne voulez pas versionner les modeles
+# *.model
+# *.vocab
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Databases locales
+*.db
+*.sqlite
+*.sqlite3
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Documentation generee
+docs/_build/
+site/
+
+# Flask
+instance/
+*.pyc
+flask_session/
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
