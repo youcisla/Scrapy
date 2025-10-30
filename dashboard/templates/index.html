@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Trends Psychology - Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version }}">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>YouTube Trends Psychology</h1>
+            <p class="subtitle">Analyse psychologique des titres de vidéos tendances</p>
+        </header>
+
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <div class="button-group">
+                <button id="start-scrape-btn" class="refresh-btn primary" onclick="startScraping()">
+                    Démarrer l'Analyse
+                </button>
+                <button id="stop-scrape-btn" class="refresh-btn danger" onclick="stopScraping()" style="display:none;">
+                    Arrêter
+                </button>
+                <button id="refresh-btn" class="refresh-btn secondary" onclick="loadData()">
+                    Actualiser
+                </button>
+            </div>
+            
+            <!-- Status Bar -->
+            <div id="status-bar" class="status-bar" style="display:none;">
+                <div class="status-content">
+                    <div class="status-icon">
+                        <div class="spinner"></div>
+                    </div>
+                    <div class="status-info">
+                        <div class="status-title">Scraping en cours...</div>
+                        <div class="status-details" id="status-details">Initialisation</div>
+                    </div>
+                    <button class="status-toggle" onclick="toggleStatusDetails()">
+                        <span id="toggle-icon">▼</span>
+                    </button>
+                </div>
+                <div id="status-extended" class="status-extended" style="display:block;">
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div id="progress-fill" class="progress-fill"></div>
+                        </div>
+                        <div id="progress-text" class="progress-text">0%</div>
+                    </div>
+                    <div class="status-logs">
+                        <div id="log-preview" class="log-preview"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Dashboard -->
+        <div id="stats-container" class="stats-grid">
+            <div class="loading">Chargement des statistiques...</div>
+        </div>
+
+        <!-- Videos Section -->
+        <div class="videos-section">
+            <div class="section-header">
+                <h2 class="section-title">Top Vidéos Tendances</h2>
+                <div class="section-actions">
+                    <select id="sort-select" class="sort-select" onchange="sortVideos(this.value)">
+                        <option value="score">Score Psychologique</option>
+                        <option value="views">Vues</option>
+                        <option value="recent">Plus Récentes</option>
+                    </select>
+                    <input type="number" id="limit-input" class="limit-input" value="20" min="5" max="100" 
+                           onchange="updateLimit(this.value)" placeholder="Limite">
+                </div>
+            </div>
+            
+            <div id="videos-container">
+                <div class="loading">Chargement des vidéos...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}?v={{ version }}"></script>
+</body>
+
+</html>

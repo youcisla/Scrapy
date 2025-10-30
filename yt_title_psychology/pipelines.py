@@ -8,11 +8,11 @@ from datetime import datetime
 import logging
 import sys
 import os
+import json
+from pathlib import Path
 
-# Ajout du répertoire parent au path pour importer utiles.py
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
-from utiles import MongoClientWrapper, TextFeatures
+# Import from yt_title_psychology package
+from yt_title_psychology.utiles import MongoClientWrapper, TextFeatures
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,6 @@ class MongoDBPipeline:
         self.items_processed = 0
         self.items_inserted = 0
         self.items_updated = 0
-        self.text_features = TextFeatures()
     
     @classmethod
     def from_crawler(cls, crawler):
@@ -117,7 +116,7 @@ class MongoDBPipeline:
         try:
             self.mongo_client = MongoClientWrapper(
                 uri=self.mongo_uri,
-                db_name=self.mongo_db,
+                database_name=self.mongo_db,
                 collection_name=self.mongo_collection
             )
             self.mongo_client.connect()
@@ -127,6 +126,13 @@ class MongoDBPipeline:
             logger.warning("Le scraping continuera mais les donnees ne seront pas stockees dans MongoDB")
             logger.warning("Seul l'export JSON sera disponible")
             self.mongo_client = None  # Désactiver MongoDB pour cette session
+        # Prepare local fallback storage (per-run if SCRAPE_RUN_DIR set)
+        run_dir = os.environ.get('SCRAPE_RUN_DIR')
+        self._local_docs = []
+        if run_dir:
+            self._local_out = Path(run_dir) / 'tendances_youtube.json'
+        else:
+            self._local_out = Path('tendances_youtube.json')
     
     def close_spider(self, spider):
         """
@@ -143,6 +149,30 @@ class MongoDBPipeline:
         logger.info(f"  - Items traites : {self.items_processed}")
         logger.info(f"  - Items inseres : {self.items_inserted}")
         logger.info(f"  - Items mis a jour : {self.items_updated}")
+        # If MongoDB was not available, persist local docs to JSON (merge by URL)
+        try:
+            if self.mongo_client is None and getattr(self, '_local_docs', None):
+                # load existing if present
+                existing = []
+                if self._local_out.exists():
+                    try:
+                        existing = json.loads(self._local_out.read_text(encoding='utf-8'))
+                    except Exception:
+                        existing = []
+
+                # index by url
+                idx = {doc.get('url'): doc for doc in existing}
+                for doc in self._local_docs:
+                    idx[doc.get('url')] = doc
+
+                merged = list(idx.values())
+                try:
+                    self._local_out.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding='utf-8')
+                    logger.info(f"Export local ecrit: {self._local_out}")
+                except Exception as e:
+                    logger.error(f"Impossible d'ecrire l'export local: {e}")
+        except Exception:
+            pass
     
     def process_item(self, item, spider):
         """
@@ -164,38 +194,53 @@ class MongoDBPipeline:
             'canal': adapter.get('canal'),
             'vues': adapter.get('vues'),
             'heure': adapter.get('heure'),
+            'duree': adapter.get('duree', '0'),
             'pays': adapter.get('pays'),
             'features': adapter.get('features', {}),
             'date_scraping': adapter.get('date_scraping'),
             'source': adapter.get('source'),
         }
         
-        # Ajout du score psychologique
+        # Calculate psychological score from features
         if document['features']:
-            document['score_psychologique'] = self.text_features.calculer_score_psychologique(
-                document['features']
+            features = document['features']
+            # Simple score calculation based on feature values
+            score = (
+                features.get('caps_count', 0) * 0.5 +
+                features.get('exclamation_count', 0) * 2 +
+                features.get('question_count', 0) * 1.5 +
+                (10 if features.get('has_emoji') else 0) +
+                (5 if features.get('has_clickbait_words') else 0)
             )
+            document['score_psychologique'] = min(100, score)  # Cap at 100
         else:
             document['score_psychologique'] = 0
         
         # Insertion/mise à jour dans MongoDB (si disponible)
         if self.mongo_client is None:
             # MongoDB non disponible, on passe l'item sans le stocker
-            logger.debug(f"MongoDB desactive, item non stocke : {document['url']}")
+            logger.debug(f"MongoDB desactive, stockage local: {document['url']}")
+            try:
+                self._local_docs.append(document)
+            except Exception:
+                pass
             return item
         
         try:
-            # Vérifier si le document existe déjà
-            existing = self.mongo_client.collection.find_one({'url': document['url']})
+            # Upsert: insert if not exists, update if exists
+            result = self.mongo_client.update_one(
+                {'url': document['url']},
+                {'$set': document},
+                upsert=True
+            )
             
-            success = self.mongo_client.insert_or_update(document)
-            
-            if success:
-                self.items_processed += 1
-                if existing:
-                    self.items_updated += 1
-                else:
-                    self.items_inserted += 1
+            self.items_processed += 1
+            if result.upserted_id:
+                self.items_inserted += 1
+                logger.debug(f"Document insere: {document['url']}")
+            else:
+                self.items_updated += 1
+                logger.debug(f"Document mis a jour: {document['url']}")
             
         except Exception as e:
             logger.error(f"Erreur lors du stockage de l'item {document['url']} : {e}")

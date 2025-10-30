@@ -26,6 +26,7 @@ class YouTubeTrendItem(scrapy.Item):
     canal = scrapy.Field()
     vues = scrapy.Field()
     heure = scrapy.Field()
+    duree = scrapy.Field()  # Video duration in seconds
     pays = scrapy.Field()
     
     # Dictionnaire des features psychologiques

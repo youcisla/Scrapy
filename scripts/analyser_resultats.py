@@ -6,7 +6,7 @@ Affiche des statistiques et le top des titres les plus accrocheurs.
 import json
 import sys
 from collections import Counter
-from utiles import TextFeatures
+from yt_title_psychology.utiles import TextFeatures
 
 
 def charger_donnees(fichier='tendances_youtube.json'):

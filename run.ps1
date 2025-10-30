@@ -17,7 +17,6 @@ function Show-Help {
     Write-Host "  .\run.ps1 run           - Scraper + Analyser (workflow complet)" -ForegroundColor Green
     Write-Host "  .\run.ps1 web           - Lancer l'interface web (Flask)" -ForegroundColor Green
     Write-Host "  .\run.ps1 clean         - Nettoyer les fichiers generes" -ForegroundColor Green
-    Write-Host "  .\run.ps1 app           - Lancer l'interface CLI" -ForegroundColor Green
     Write-Host ""
     Write-Host "===================================================================" -ForegroundColor Cyan
 }
@@ -48,7 +47,7 @@ function Start-QuickScraping {
 
 function Start-Analysis {
     Write-Host "Analyse des resultats..." -ForegroundColor Yellow
-    & $PYTHON analyser_resultats.py $OUTPUT
+    & $PYTHON scripts\\analyser_resultats.py $OUTPUT
 }
 
 function Start-FullWorkflow {
@@ -82,7 +81,9 @@ function Start-App {
 function Start-WebApp {
     Write-Host "Demarrage de l'application web..." -ForegroundColor Yellow
     Write-Host "Ouvrez votre navigateur sur: http://localhost:5000" -ForegroundColor Green
-    & $PYTHON web_app.py
+    # Enable MongoDB now that connection is working
+    $env:USE_MONGODB = "true"
+    & $PYTHON dashboard\\web_app.py
 }
 
 function Show-Version {
@@ -108,7 +109,7 @@ switch ($command) {
     "run-quick" { Start-QuickWorkflow }
     "web" { Start-WebApp }
     "clean" { Clear-GeneratedFiles }
-    "app" { Start-App }
+    
     "version" { Show-Version }
     "count" { Show-Count }
     default { Show-Help }

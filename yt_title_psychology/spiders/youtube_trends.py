@@ -10,10 +10,8 @@ import re
 import sys
 import os
 
-# Ajout du répertoire parent au path pour importer utiles.py
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-
-from utiles import TextFeatures
+# Import from yt_title_psychology package
+from yt_title_psychology.utiles import TextFeatures, write_scrape_status
 from yt_title_psychology.items import YouTubeTrendItem
 
 
@@ -31,7 +29,8 @@ class YouTubeTrendsSpider(scrapy.Spider):
     
     name = 'youtube_trends'
     allowed_domains = ['youtube.trends24.in']
-    
+    # allow following to YouTube pages to enrich metadata
+    allowed_domains.extend(['www.youtube.com', 'youtube.com', 'youtu.be'])
     # URL de départ : page mondiale
     start_urls = ['https://youtube.trends24.in/']
     
@@ -42,10 +41,27 @@ class YouTubeTrendsSpider(scrapy.Spider):
     }
     
     def __init__(self, *args, **kwargs):
-        """Initialise le spider et l'extracteur de features NLP."""
+        """Initialise le spider."""
         super(YouTubeTrendsSpider, self).__init__(*args, **kwargs)
-        self.text_features = TextFeatures()
-        self.logger.info("Spider youtube_trends initialise avec TextFeatures")
+        self.logger.info("Spider youtube_trends initialise")
+        # Progress tracking
+        self._countries_total = None
+        self._countries_done = 0
+        self._items_scraped = 0
+        self._current_country = None
+        self._run_dir = os.environ.get('SCRAPE_RUN_DIR')
+        # initial status
+        try:
+            write_scrape_status(self._run_dir, {
+                'started_at': datetime.now().isoformat(),
+                'countries_total': None,
+                'countries_done': 0,
+                'items_scraped': 0,
+                'current_country': None,
+                'status': 'running'
+            })
+        except Exception as e:
+            self.logger.warning(f"Failed to write initial status: {e}")
     
     def parse(self, response):
         """
@@ -70,6 +86,19 @@ class YouTubeTrendsSpider(scrapy.Spider):
                 countries.add(href)
         
         self.logger.info(f"Pays detectes : {len(countries)}")
+        # update total
+        try:
+            self._countries_total = len(countries) if countries else 1
+            write_scrape_status(self._run_dir, {
+                'started_at': datetime.now().isoformat(),
+                'countries_total': self._countries_total,
+                'countries_done': self._countries_done,
+                'items_scraped': self._items_scraped,
+                'current_country': None,
+                'status': 'running'
+            })
+        except Exception as e:
+            self.logger.warning(f"Failed to write status: {e}")
         
         # Si aucun pays détecté, scraper la page mondiale par défaut
         if not countries:
@@ -91,6 +120,7 @@ class YouTubeTrendsSpider(scrapy.Spider):
                     callback=self.parse_country,
                     meta={'country': country_name}
                 )
+                
     
     def parse_country(self, response):
         """
@@ -116,9 +146,14 @@ class YouTubeTrendsSpider(scrapy.Spider):
         
         if not video_links:
             self.logger.warning(f"Aucune video trouvee pour {country}")
+            # Still increment countries_done even if no videos
+            self._countries_done += 1
             return
         
         self.logger.info(f"{len(video_links)} videos trouvees pour {country}")
+        
+        # Update current country
+        self._current_country = country
         
         for link in video_links:
             try:
@@ -160,27 +195,58 @@ class YouTubeTrendsSpider(scrapy.Spider):
                 # Chercher des patterns comme "2 hours ago", "il y a 3h", etc.
                 heure = self._extraire_heure(link)
                 
-                # Calcul des features psychologiques
-                features = self.text_features.extraire_features(titre)
+                # Prepare a base item payload and follow to the YouTube page to enrich metadata
+                base = {
+                    'titre': titre,
+                    'url': url,
+                    'canal': canal,
+                    'vues': vues,
+                    'heure': heure,
+                    'pays': country,
+                    'date_scraping': datetime.now().isoformat(),
+                    'source': response.url
+                }
+
+                # increment counter and persist progress before following
+                try:
+                    self._items_scraped += 1
+                    write_scrape_status(self._run_dir, {
+                        'started_at': datetime.now().isoformat(),
+                        'countries_total': self._countries_total,
+                        'countries_done': self._countries_done,
+                        'items_scraped': self._items_scraped,
+                        'current_country': self._current_country,
+                        'status': 'running'
+                    })
+                except Exception as e:
+                    self.logger.warning(f"Failed to write status: {e}")
+
+                # Skip fetching individual video pages for speed - just yield the base item
+                # The duration and other metadata will be missing, but scraping is much faster
+                yield base
                 
-                # Création de l'item
-                item = YouTubeTrendItem()
-                item['titre'] = titre
-                item['url'] = url
-                item['canal'] = canal
-                item['vues'] = vues
-                item['heure'] = heure
-                item['pays'] = country
-                item['features'] = features
-                item['date_scraping'] = datetime.utcnow().isoformat()
-                item['source'] = response.url
-                
-                yield item
+                # DISABLED: Follow the YouTube URL to extract channel/views/publish time
+                # This makes scraping very slow (276 additional requests)
+                # yield scrapy.Request(url, callback=self.parse_video, meta={'base': base}, dont_filter=True)
             
             except Exception as e:
                 self.logger.error(f"Erreur lors du parsing d'une video : {e}")
                 continue
-    
+        
+        # Finished this country - increment AFTER processing all videos
+        try:
+            self._countries_done += 1
+            write_scrape_status(self._run_dir, {
+                'started_at': datetime.now().isoformat(),
+                'countries_total': self._countries_total,
+                'countries_done': self._countries_done,
+                'items_scraped': self._items_scraped,
+                'current_country': None,
+                'status': 'running'
+            })
+        except Exception as e:
+            self.logger.warning(f"Failed to write status: {e}")
+            
     def _nettoyer_url(self, url: str) -> str:
         """
         Nettoie une URL YouTube pour ne garder que l'essentiel.
@@ -310,3 +376,113 @@ class YouTubeTrendsSpider(scrapy.Spider):
                 return match.group(0)
         
         return 'Inconnue'
+
+    def closed(self, reason):
+        """Called when the spider finishes or is closed; write final status."""
+        try:
+            write_scrape_status(self._run_dir, {
+                'started_at': datetime.now().isoformat(),
+                'finished_at': datetime.now().isoformat(),
+                'countries_total': self._countries_total,
+                'countries_done': self._countries_done,
+                'items_scraped': self._items_scraped,
+                'current_country': None,
+                'status': 'finished',
+                'reason': str(reason)
+            })
+        except Exception as e:
+            self.logger.warning(f"Failed to write final status: {e}")
+
+    def parse_video(self, response):
+        """Parse a YouTube video page to enrich metadata (channel, views, published date).
+
+        This is best-effort: YouTube pages are JS-heavy, but some metadata is present
+        in initial HTML meta tags or in inline JSON.
+        """
+        base = response.meta.get('base', {})
+        try:
+            html = response.text
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Channel: try meta[name='author'] or link rel="author"
+            canal = base.get('canal') or ''
+            m = soup.find('meta', attrs={'name': 'author'})
+            if m and m.get('content'):
+                canal = m.get('content')
+
+            # Views: try meta[itemprop='interactionCount'] or look for "viewCount" in the page JSON
+            vues = base.get('vues') or 0
+            mv = soup.find('meta', itemprop='interactionCount')
+            if mv and mv.get('content'):
+                try:
+                    vues = int(mv.get('content'))
+                except Exception:
+                    pass
+
+            if vues == 0:
+                # fallback: search for "viewCount":"12345" pattern
+                m2 = re.search(r'"viewCount"\s*:\s*"?(\d{1,3}(?:[,\.\d]*)?)"?', html)
+                if m2:
+                    n = m2.group(1).replace(',', '').replace('.', '')
+                    try:
+                        vues = int(n)
+                    except Exception:
+                        pass
+
+            # Published date: meta[itemprop='datePublished']
+            heure = base.get('heure') or 'Inconnue'
+            md = soup.find('meta', itemprop='datePublished')
+            if md and md.get('content'):
+                heure = md.get('content')
+            
+            # Video duration: meta[itemprop='duration'] or look for "lengthSeconds" in JSON
+            duree = base.get('duree') or '0'
+            md_duration = soup.find('meta', itemprop='duration')
+            if md_duration and md_duration.get('content'):
+                # ISO 8601 duration format: PT1M30S = 1 minute 30 seconds
+                duration_str = md_duration.get('content')
+                try:
+                    # Parse ISO 8601 duration (e.g., PT1H2M30S)
+                    match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration_str)
+                    if match:
+                        hours = int(match.group(1) or 0)
+                        minutes = int(match.group(2) or 0)
+                        seconds = int(match.group(3) or 0)
+                        duree = str(hours * 3600 + minutes * 60 + seconds)
+                except Exception:
+                    pass
+            
+            if duree == '0':
+                # fallback: search for "lengthSeconds":"123" pattern
+                m_length = re.search(r'"lengthSeconds"\s*:\s*"?(\d+)"?', html)
+                if m_length:
+                    duree = m_length.group(1)
+
+            # Extract features from title
+            titre = base.get('titre', '')
+            features = TextFeatures(titre).get_all_features() if titre else {}
+
+            item = YouTubeTrendItem()
+            item['titre'] = base.get('titre')
+            item['url'] = base.get('url')
+            item['canal'] = canal or base.get('canal', 'Inconnu')
+            item['vues'] = vues
+            item['heure'] = heure
+            item['duree'] = duree
+            item['pays'] = base.get('pays')
+            item['features'] = features
+            item['date_scraping'] = base.get('date_scraping')
+            item['source'] = base.get('source')
+
+            yield item
+
+        except Exception as e:
+            self.logger.debug(f"Impossible d'enrichir la page YouTube: {e}")
+            # fallback to base item
+            item = YouTubeTrendItem()
+            for k, v in base.items():
+                item[k] = v
+            titre = base.get('titre', '')
+            item['features'] = TextFeatures(titre).get_all_features() if titre else {}
+            item['duree'] = item.get('duree', '0')
+            yield item

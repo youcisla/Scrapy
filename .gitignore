@@ -89,3 +89,5 @@ htmlcov/
 # Fichiers temporaires Windows
 *.tmp
 ~$*
+
+runs/
