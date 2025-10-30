@@ -136,7 +136,7 @@ class MongoDBPipeline:
         Args:
             spider: Instance du spider
         """
-        if self.mongo_client:
+        if self.mongo_client is not None:
             self.mongo_client.close()
         
         logger.info(f"Pipeline MongoDB ferme. Stats :")

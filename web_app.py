@@ -18,18 +18,25 @@ def charger_donnees():
     
     try:
         with open(json_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return data
-    except json.JSONDecodeError:
-        # Essayer de lire ligne par ligne
-        videos = []
-        with open(json_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                try:
-                    videos.append(json.loads(line.strip().rstrip(',')))
-                except:
-                    continue
-        return videos
+            content = f.read()
+            # Nettoyer le contenu si nécessaire
+            if content.startswith('['):
+                data = json.loads(content)
+            else:
+                # Essayer de parser ligne par ligne
+                videos = []
+                for line in content.split('\n'):
+                    line = line.strip().rstrip(',')
+                    if line and line not in ['[', ']']:
+                        try:
+                            videos.append(json.loads(line))
+                        except:
+                            continue
+                return videos
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        print(f"Erreur lors du chargement: {e}")
+        return []
 
 @app.route('/')
 def index():
@@ -105,6 +112,6 @@ def get_top_videos(n):
 
 if __name__ == '__main__':
     print("=" * 80)
-    print("🚀 Serveur web démarré sur http://localhost:5000")
+    print("Serveur web demarre sur http://localhost:5000")
     print("=" * 80)
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -63,18 +63,18 @@
             transform: translateY(-5px);
         }
         
-        .stat-value {
-            font-size: 3em;
-            font-weight: bold;
-            color: #667eea;
-            margin: 10px 0;
-        }
-        
         .stat-label {
             color: #666;
-            font-size: 1.1em;
+            font-size: 0.9em;
             text-transform: uppercase;
             letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
         }
         
         .videos-section {
@@ -174,10 +174,6 @@
             color: white;
         }
         
-        .emoji {
-            font-size: 1.5em;
-        }
-        
         .refresh-btn {
             background: #667eea;
             color: white;
@@ -208,8 +204,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>📊 YouTube Trends Psychology</h1>
-            <p class="subtitle">Analyse psychologique des titres de vidéos tendances</p>
+            <h1>YouTube Trends Psychology</h1>
+            <p class="subtitle">Analyse psychologique des titres de videos tendances</p>
         </header>
         
         <div id="stats-container" class="stats-grid">
@@ -217,10 +213,10 @@
         </div>
         
         <div class="videos-section">
-            <h2 class="section-title">🏆 Top 20 des Vidéos (Score Psychologique)</h2>
-            <button class="refresh-btn" onclick="loadData()">🔄 Actualiser</button>
+            <h2 class="section-title">Top 20 des Videos (Score Psychologique)</h2>
+            <button class="refresh-btn" onclick="loadData()">Actualiser</button>
             <div id="videos-container">
-                <div class="loading">Chargement des vidéos...</div>
+                <div class="loading">Chargement des videos...</div>
             </div>
         </div>
     </div>
@@ -249,41 +245,36 @@
                 
                 const statsHtml = `
                     <div class="stat-card">
-                        <div class="emoji">📹</div>
+                        <div class="stat-label">Videos Analysees</div>
                         <div class="stat-value">${data.total}</div>
-                        <div class="stat-label">Vidéos Analysées</div>
                     </div>
                     <div class="stat-card">
-                        <div class="emoji">🧠</div>
-                        <div class="stat-value">${data.avg_score}</div>
                         <div class="stat-label">Score Moyen</div>
+                        <div class="stat-value">${data.avg_score}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="emoji">📝</div>
-                        <div class="stat-value">${data.features_moyennes.longueur}</div>
                         <div class="stat-label">Longueur Moyenne</div>
+                        <div class="stat-value">${data.features_moyennes.longueur}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="emoji">😀</div>
-                        <div class="stat-value">${data.features_moyennes.emojis}</div>
                         <div class="stat-label">Emojis Moyens</div>
+                        <div class="stat-value">${data.features_moyennes.emojis}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="emoji">#️⃣</div>
-                        <div class="stat-value">${data.features_moyennes.hashtags}</div>
                         <div class="stat-label">Hashtags Moyens</div>
+                        <div class="stat-value">${data.features_moyennes.hashtags}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="emoji">❗</div>
-                        <div class="stat-value">${data.features_moyennes.exclamations}</div>
                         <div class="stat-label">Exclamations Moyennes</div>
+                        <div class="stat-value">${data.features_moyennes.exclamations}</div>
                     </div>
                 `;
                 
                 document.getElementById('stats-container').innerHTML = statsHtml;
             } catch (error) {
+                console.error('Erreur stats:', error);
                 document.getElementById('stats-container').innerHTML = 
-                    '<div class="loading">❌ Erreur lors du chargement des statistiques</div>';
+                    '<div class="loading">Erreur lors du chargement des statistiques</div>';
             }
         }
         
@@ -294,7 +285,7 @@
                 
                 if (videos.length === 0) {
                     document.getElementById('videos-container').innerHTML = 
-                        '<p style="text-align:center; padding:30px; color:#666;">Aucune vidéo disponible. Lancez d\'abord un scraping avec <code>./run.ps1 scrape</code></p>';
+                        '<p style="text-align:center; padding:30px; color:#666;">Aucune video disponible. Lancez d\'abord un scraping avec <code>.\\run.ps1 scrape</code></p>';
                     return;
                 }
                 
@@ -314,30 +305,31 @@
                             </div>
                             
                             <div class="video-meta">
-                                <span class="meta-item">📺 ${video.canal || 'Inconnu'}</span>
-                                <span class="meta-item">👁️ ${formatNumber(video.vues || 0)} vues</span>
-                                <span class="meta-item">⏰ ${video.heure_publication || 'N/A'}</span>
-                                <span class="meta-item">🌍 ${video.pays || 'World'}</span>
+                                <span class="meta-item">Canal: ${video.canal || 'Inconnu'}</span>
+                                <span class="meta-item">Vues: ${formatNumber(video.vues || 0)}</span>
+                                <span class="meta-item">Publie: ${video.heure_publication || 'N/A'}</span>
+                                <span class="meta-item">Pays: ${video.pays || 'World'}</span>
                             </div>
                             
                             <div class="features-grid">
-                                <div class="feature-tag">📏 ${features.longueur || 0} car.</div>
-                                <div class="feature-tag">😀 ${features.nb_emojis || 0} emojis</div>
-                                <div class="feature-tag">#️⃣ ${features.nb_hashtags || 0} hashtags</div>
-                                <div class="feature-tag">❗ ${features.nb_exclamations || 0} !</div>
-                                <div class="feature-tag">❓ ${features.nb_questions || 0} ?</div>
-                                <div class="feature-tag">🔠 ${(features.pourcentage_majuscules || 0).toFixed(1)}% MAJ</div>
+                                <div class="feature-tag">${features.longueur || 0} car.</div>
+                                <div class="feature-tag">${features.nb_emojis || 0} emojis</div>
+                                <div class="feature-tag">${features.nb_hashtags || 0} hashtags</div>
+                                <div class="feature-tag">${features.nb_exclamations || 0} !</div>
+                                <div class="feature-tag">${features.nb_questions || 0} ?</div>
+                                <div class="feature-tag">${(features.pourcentage_majuscules || 0).toFixed(1)}% MAJ</div>
                             </div>
                             
-                            ${video.url ? `<div style="margin-top:10px;"><a href="${video.url}" target="_blank" style="color:#667eea; text-decoration:none;">🔗 Voir la vidéo</a></div>` : ''}
+                            ${video.url ? `<div style="margin-top:10px;"><a href="${video.url}" target="_blank" style="color:#667eea; text-decoration:none;">Voir la video</a></div>` : ''}
                         </div>
                     `;
                 }).join('');
                 
                 document.getElementById('videos-container').innerHTML = videosHtml;
             } catch (error) {
+                console.error('Erreur videos:', error);
                 document.getElementById('videos-container').innerHTML = 
-                    '<div class="loading">❌ Erreur lors du chargement des vidéos</div>';
+                    '<div class="loading">Erreur lors du chargement des videos</div>';
             }
         }
         
