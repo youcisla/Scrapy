@@ -75,9 +75,17 @@ site/
 instance/
 *.pyc
 flask_session/
+__pycache__/
+
+# Templates generés (garder templates/ pour le frontend)
+# !templates/
 
 # Tests
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
+
+# Fichiers temporaires Windows
+*.tmp
+~$*
