@@ -36,8 +36,12 @@ class YouTubeTrendsSpider(scrapy.Spider):
     
     # Initialisation de l'extracteur de features
     custom_settings = {
-        'DOWNLOAD_DELAY': 2,  # Politesse : 2 secondes entre les requêtes
-        'CONCURRENT_REQUESTS': 1,  # Une requête à la fois
+        'DOWNLOAD_DELAY': 0.3,  # Fast: 0.3 seconds between requests
+        'CONCURRENT_REQUESTS': 8,  # High concurrency for speed
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 8,
+        'DOWNLOAD_TIMEOUT': 10,  # 10 second timeout (fast fail)
+        'RETRY_TIMES': 0,  # No retries - fail fast
+        'DEPTH_LIMIT': 2,  # Limit depth to avoid deep crawling
     }
     
     def __init__(self, *args, **kwargs):
@@ -221,13 +225,32 @@ class YouTubeTrendsSpider(scrapy.Spider):
                 except Exception as e:
                     self.logger.warning(f"Failed to write status: {e}")
 
-                # Skip fetching individual video pages for speed - just yield the base item
-                # The duration and other metadata will be missing, but scraping is much faster
-                yield base
-                
-                # DISABLED: Follow the YouTube URL to extract channel/views/publish time
-                # This makes scraping very slow (276 additional requests)
-                # yield scrapy.Request(url, callback=self.parse_video, meta={'base': base}, dont_filter=True)
+                # Calculate text features before yielding
+                titre = base.get('titre', '')
+                if titre:
+                    try:
+                        features = TextFeatures(titre).get_all_features()
+                        base['features'] = features
+                        # Calculate psychological score
+                        base['score_psychologique'] = self._calculer_score_psycho(features)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to calculate features: {e}")
+                        base['features'] = {}
+                        base['score_psychologique'] = 0
+                else:
+                    base['features'] = {}
+                    base['score_psychologique'] = 0
+
+                # Follow YouTube URL to get metadata (channel, views, duration)
+                # Using fast timeouts to keep total scraping under 1 minute
+                yield scrapy.Request(
+                    url, 
+                    callback=self.parse_video, 
+                    meta={'base': base}, 
+                    dont_filter=True,
+                    errback=self.errback_video,
+                    priority=1
+                )
             
             except Exception as e:
                 self.logger.error(f"Erreur lors du parsing d'une video : {e}")
@@ -392,6 +415,66 @@ class YouTubeTrendsSpider(scrapy.Spider):
             })
         except Exception as e:
             self.logger.warning(f"Failed to write final status: {e}")
+
+    def errback_video(self, failure):
+        """Handle errors when fetching video pages - yield the base item without enrichment."""
+        request = failure.request
+        base = request.meta.get('base', {})
+        
+        # Just yield the base item with features already calculated
+        item = YouTubeTrendItem()
+        for k, v in base.items():
+            item[k] = v
+        
+        # Ensure duree has a default
+        if 'duree' not in item:
+            item['duree'] = '0'
+            
+        yield item
+
+    def _calculer_score_psycho(self, features: dict) -> float:
+        """
+        Calculate psychological score based on text features.
+        
+        Args:
+            features: Dictionary of text features
+            
+        Returns:
+            float: Psychological score (0-100)
+        """
+        score = 0.0
+        
+        # Emojis increase engagement (+5 per emoji, max 25)
+        score += min(features.get('nb_emojis', 0) * 5, 25)
+        
+        # Questions create curiosity (+10 per question, max 20)
+        score += min(features.get('nb_questions', 0) * 10, 20)
+        
+        # Exclamations add excitement (+5 per exclamation, max 15)
+        score += min(features.get('nb_exclamations', 0) * 5, 15)
+        
+        # Hashtags aid discoverability (+3 per hashtag, max 12)
+        score += min(features.get('nb_hashtags', 0) * 3, 12)
+        
+        # Uppercase percentage (moderate is good, too much is spammy)
+        uppercase_pct = features.get('pourcentage_majuscules', 0)
+        if 10 <= uppercase_pct <= 30:
+            score += 15
+        elif 30 < uppercase_pct <= 50:
+            score += 8
+        elif uppercase_pct > 50:
+            score += 3  # Too much uppercase
+        
+        # Title length (50-80 chars is optimal)
+        length = features.get('longueur', 0)
+        if 50 <= length <= 80:
+            score += 13
+        elif 40 <= length < 50 or 80 < length <= 100:
+            score += 8
+        elif length < 40 or length > 100:
+            score += 3
+        
+        return min(score, 100)  # Cap at 100
 
     def parse_video(self, response):
         """Parse a YouTube video page to enrich metadata (channel, views, published date).

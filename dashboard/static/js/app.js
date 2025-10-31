@@ -181,8 +181,10 @@ async function loadStats() {
 
 async function loadVideos() {
     try {
-        const response = await fetch('/api/top/100'); // Fetch more for client-side sorting
+        console.log('[DEBUG] Loading videos from /api/top/100...');
+        const response = await fetch('/api/top/100');
         const videos = await response.json();
+        console.log('[DEBUG] Loaded videos:', videos.length);
         
         currentVideos = videos;
         renderVideos(videos.slice(0, currentLimit));
@@ -286,10 +288,14 @@ function startStatusPolling() {
                     updateStatus('Analyse en cours...', 'Collecte des données YouTube');
                 }
                 
-                // Only refresh data every 10 seconds during scraping to reduce load
+                // Update logs
+                updateLogs(data);
+                
+                // Refresh data every 5 seconds during scraping (reduced from 10)
                 const now = Date.now();
-                if (!window.lastDataRefresh || (now - window.lastDataRefresh) > 10000) {
+                if (!window.lastDataRefresh || (now - window.lastDataRefresh) > 5000) {
                     await loadVideos();
+                    await loadStats();
                     window.lastDataRefresh = now;
                 }
             } else {
@@ -330,6 +336,27 @@ function updateProgress(percent, text) {
     console.log('[DEBUG] updateProgress called:', {percent, text, progressFill, progressText});
     if (progressFill) progressFill.style.width = percent + '%';
     if (progressText) progressText.textContent = text || `${percent}%`;
+}
+
+function updateLogs(data) {
+    const logPreview = document.getElementById('log-preview');
+    if (!logPreview) return;
+    
+    const logs = [];
+    if (data.started_at) {
+        logs.push(`🕒 Démarré: ${new Date(data.started_at).toLocaleTimeString('fr-FR')}`);
+    }
+    if (data.countries_total) {
+        logs.push(`🌍 Pays: ${data.countries_done || 0}/${data.countries_total}`);
+    }
+    if (data.current_country) {
+        logs.push(`📍 En cours: ${data.current_country}`);
+    }
+    if (data.items_scraped) {
+        logs.push(`📊 Vidéos collectées: ${data.items_scraped}`);
+    }
+    
+    logPreview.innerHTML = logs.join('<br>');
 }
 
 function hideStatusBar() {
@@ -443,6 +470,7 @@ function updateLimit(limit) {
 
 function renderVideos(videos) {
     const container = document.getElementById('videos-container');
+    console.log('[DEBUG] renderVideos called:', {videoCount: videos.length, container: !!container});
     if (!container) return;
     
     if (videos.length === 0) {
