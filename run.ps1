@@ -81,7 +81,7 @@ function Start-App {
 function Start-WebApp {
     Write-Host "Demarrage de l'application web..." -ForegroundColor Yellow
     Write-Host "Ouvrez votre navigateur sur: http://localhost:5000" -ForegroundColor Green
-    # Enable MongoDB now that connection is working
+    # Enable MongoDB now that cluster is awake
     $env:USE_MONGODB = "true"
     & $PYTHON dashboard\\web_app.py
 }

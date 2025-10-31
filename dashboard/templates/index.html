@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube Trends Psychology - Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version }}">
 </head>
 
@@ -24,8 +25,8 @@
                 <button id="stop-scrape-btn" class="refresh-btn danger" onclick="stopScraping()" style="display:none;">
                     Arrêter
                 </button>
-                <button id="refresh-btn" class="refresh-btn secondary" onclick="loadData()">
-                    Actualiser
+                <button id="clear-db-btn" class="refresh-btn warning" onclick="clearDatabase()">
+                    <i class="fas fa-trash-alt"></i> Effacer la Base
                 </button>
             </div>
             

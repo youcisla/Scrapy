@@ -9,6 +9,12 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 import re
 
+# Safe __file__ fallback
+try:
+    _current_file = Path(__file__).resolve()
+except NameError:
+    _current_file = Path(os.getcwd()) / 'yt_title_psychology' / 'utiles.py'
+
 
 class TextFeatures:
     """Classe pour extraire des features textuelles des titres YouTube"""
@@ -270,7 +276,7 @@ def read_scrape_status(run_dir=None):
         dict: Statut du scraping ou {} si non trouve
     """
     if run_dir is None:
-        runs_dir = Path(__file__).parent.parent / 'runs'
+        runs_dir = _current_file.parent.parent / 'runs'
         if not runs_dir.exists():
             return {}
         
@@ -301,7 +307,7 @@ def get_latest_run_dir():
     Returns:
         Path: Chemin du run le plus recent ou None
     """
-    runs_dir = Path(__file__).parent.parent / 'runs'
+    runs_dir = _current_file.parent.parent / 'runs'
     if not runs_dir.exists():
         return None
     
@@ -319,7 +325,7 @@ def create_run_dir():
     Returns:
         Path: Chemin du repertoire cree
     """
-    runs_dir = Path(__file__).parent.parent / 'runs'
+    runs_dir = _current_file.parent.parent / 'runs'
     runs_dir.mkdir(exist_ok=True)
     
     timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')

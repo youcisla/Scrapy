@@ -12,8 +12,14 @@ from pathlib import Path
 import time
 import subprocess
 
+# Safe __file__ fallback
+try:
+    _current_file = Path(__file__).resolve()
+except NameError:
+    _current_file = Path(os.getcwd()) / 'dashboard' / 'web_app.py'
+
 # Add yt_title_psychology directory to path to import utiles
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'yt_title_psychology'))
+sys.path.insert(0, str(_current_file.parents[1] / 'yt_title_psychology'))
 
 # optional: import helpers to read status
 try:
@@ -45,7 +51,7 @@ def charger_donnees():
     4. Fallback parsing strategies (concatenated JSON, line-by-line)
     """
     # Check if MongoDB is disabled via environment variable
-    use_mongodb = os.environ.get('USE_MONGODB', 'false').lower() in ('true', '1', 'yes')
+    use_mongodb = os.environ.get('USE_MONGODB', 'true').lower() in ('true', '1', 'yes')
     
     # Try MongoDB first only if enabled
     if use_mongodb:
@@ -100,7 +106,7 @@ def charger_donnees():
 
         # if no active-run file, fallback to the most recent run folder on disk
         if not json_file.exists():
-            project_root = Path(__file__).resolve().parents[1]
+            project_root = _current_file.parents[1]
             runs_dir = project_root / 'runs'
             if runs_dir.exists():
                 # pick latest run folder by mtime
@@ -189,7 +195,7 @@ def scrape_progress_sse():
     Query param: run=<run_id> (optional). If not provided, uses active run.
     """
     run_id = request.args.get('run')
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = _current_file.parents[1]
 
     # Determine status file
     status_path = None
@@ -359,7 +365,7 @@ def _spawn_scrape_process(output_file: str = 'tendances_youtube.json'):
 
     Returns a subprocess.Popen object with attributes `run_dir` and `run_id` set.
     """
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = _current_file.parents[1]
 
     # Create runs dir if needed
     runs_dir = project_root / 'runs'
@@ -722,7 +728,7 @@ def download_logs():
 @app.route('/api/runs')
 def list_runs():
     """List past runs under the runs/ directory with meta information."""
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = _current_file.parents[1]
     runs_dir = project_root / 'runs'
     runs = []
     if not runs_dir.exists():
@@ -747,7 +753,7 @@ def list_runs():
 
 @app.route('/api/runs/<run_id>/meta')
 def run_meta(run_id):
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = _current_file.parents[1]
     meta_file = project_root / 'runs' / run_id / 'meta.json'
     if not meta_file.exists():
         return jsonify({'error': 'run not found'}), 404
@@ -759,7 +765,7 @@ def run_meta(run_id):
 
 @app.route('/api/runs/<run_id>/status')
 def run_status(run_id):
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = _current_file.parents[1]
     status_file = project_root / 'runs' / run_id / 'scrape_status.json'
     if not status_file.exists():
         return jsonify({}), 200
@@ -772,7 +778,7 @@ def run_status(run_id):
 @app.route('/api/runs/<run_id>/logs')
 def run_logs(run_id):
     """SSE stream for a specific run's log file."""
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = _current_file.parents[1]
     log_path = project_root / 'runs' / run_id / 'scrape_output.log'
     if not log_path.exists():
         return jsonify({'error': 'log not found'}), 404
@@ -803,7 +809,7 @@ def run_logs(run_id):
 
 @app.route('/api/runs/<run_id>/logs/download')
 def run_logs_download(run_id):
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = _current_file.parents[1]
     log_file = project_root / 'runs' / run_id / 'scrape_output.log'
     if not log_file.exists():
         return jsonify({'error': 'no log for run'}), 404
@@ -832,6 +838,70 @@ def scrape_progress():
         return jsonify(data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/database/clear', methods=['POST'])
+def clear_database():
+    """Efface toutes les données de MongoDB et tous les fichiers JSON dans runs/.
+    
+    Cette fonctionnalité permet de repartir à zéro pour une démonstration en direct.
+    """
+    try:
+        cleared = {
+            'mongodb': False,
+            'json_files': 0,
+            'runs_deleted': 0
+        }
+        
+        # Always try to clear MongoDB first
+        try:
+            from pymongo import MongoClient
+            mongo_uri = os.environ.get('MONGODB_URI', 'mongodb+srv://admin:admin@localcluster.ovkh1ky.mongodb.net/')
+            client = MongoClient(mongo_uri, serverSelectionTimeoutMS=2000)
+            db = client['youtube']
+            collection = db['youtube']
+            
+            # Delete all documents
+            result = collection.delete_many({})
+            cleared['mongodb'] = True
+            cleared['mongodb_deleted_count'] = result.deleted_count
+            
+            print(f"MongoDB effacée: {result.deleted_count} documents supprimés")
+        except Exception as e:
+            print(f"Impossible d'effacer MongoDB: {e}")
+        
+        # Clear all JSON files in runs/
+        project_root = _current_file.parents[1]
+        runs_dir = project_root / 'runs'
+        
+        if runs_dir.exists():
+            import shutil
+            for run_folder in runs_dir.iterdir():
+                if run_folder.is_dir():
+                    try:
+                        # Count JSON files before deletion
+                        json_files = list(run_folder.glob('*.json'))
+                        cleared['json_files'] += len(json_files)
+                        
+                        # Delete entire run folder
+                        shutil.rmtree(run_folder)
+                        cleared['runs_deleted'] += 1
+                    except Exception as e:
+                        print(f"Erreur lors de la suppression de {run_folder}: {e}")
+        
+        print(f"Base de données nettoyée: {cleared['runs_deleted']} runs supprimés, {cleared['json_files']} fichiers JSON effacés")
+        
+        return jsonify({
+            'success': True,
+            'message': f"Base de données effacée avec succès",
+            'details': cleared
+        })
+        
+    except Exception as e:
+        print(f"Erreur lors du nettoyage de la base de données: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 if __name__ == '__main__':
     print("=" * 80)

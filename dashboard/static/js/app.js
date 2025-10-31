@@ -187,11 +187,17 @@ async function loadVideos() {
         console.log('[DEBUG] Loaded videos:', videos.length);
         
         currentVideos = videos;
-        renderVideos(videos.slice(0, currentLimit));
+        
+        // If we have videos, render them
+        if (videos.length > 0) {
+            renderVideos(videos.slice(0, currentLimit));
+        }
     } catch (error) {
         console.error('Erreur videos:', error);
-        document.getElementById('videos-container').innerHTML = 
-            '<div class="loading">Erreur lors du chargement des vidéos</div>';
+        const container = document.getElementById('videos-container');
+        if (container && currentVideos.length === 0) {
+            container.innerHTML = '<div class="loading">Aucune vidéo disponible. Lancez une analyse.</div>';
+        }
     }
 }
 
@@ -237,6 +243,10 @@ async function startScraping() {
             
             // Start polling for status
             startStatusPolling();
+            
+            // Load existing data immediately
+            await loadVideos();
+            await loadStats();
         } else {
             console.error('[DEBUG] Unexpected response status:', data);
             showNotification('Erreur: ' + data.message, 'error');
@@ -294,9 +304,11 @@ function startStatusPolling() {
                 // Refresh data every 5 seconds during scraping (reduced from 10)
                 const now = Date.now();
                 if (!window.lastDataRefresh || (now - window.lastDataRefresh) > 5000) {
+                    console.log('[DEBUG] Auto-refreshing videos and stats...');
                     await loadVideos();
                     await loadStats();
                     window.lastDataRefresh = now;
+                    console.log('[DEBUG] Refresh complete');
                 }
             } else {
                 // Scraping finished
@@ -310,6 +322,7 @@ function startStatusPolling() {
                 }
                 
                 // Final data refresh
+                console.log('[DEBUG] Final refresh after scraping...');
                 await loadVideos();
                 await loadStats();
                 
@@ -343,20 +356,37 @@ function updateLogs(data) {
     if (!logPreview) return;
     
     const logs = [];
+    
+    // Start time
     if (data.started_at) {
-        logs.push(`Démarré: ${new Date(data.started_at).toLocaleTimeString('fr-FR')}`);
-    }
-    if (data.countries_total) {
-        logs.push(`Pays: ${data.countries_done || 0}/${data.countries_total}`);
-    }
-    if (data.current_country) {
-        logs.push(`En cours: ${data.current_country}`);
-    }
-    if (data.items_scraped) {
-        logs.push(`Vidéos collectées: ${data.items_scraped}`);
+        const startTime = new Date(data.started_at).toLocaleTimeString('fr-FR');
+        logs.push(`<div class="log-line"><span class="log-icon"><i class="far fa-clock"></i></span><span class="log-label">Démarré:</span><span class="log-value">${startTime}</span></div>`);
     }
     
-    logPreview.innerHTML = logs.join('<br>');
+    // Countries progress
+    if (data.countries_total) {
+        const countriesProgress = `${data.countries_done || 0}/${data.countries_total}`;
+        logs.push(`<div class="log-line"><span class="log-icon"><i class="fas fa-globe"></i></span><span class="log-label">Pays:</span><span class="log-value">${countriesProgress}</span></div>`);
+    }
+    
+    // Current country
+    if (data.current_country) {
+        logs.push(`<div class="log-line"><span class="log-icon"><i class="fas fa-map-marker-alt"></i></span><span class="log-label">En cours:</span><span class="log-value">${data.current_country}</span></div>`);
+    }
+    
+    // Items scraped
+    if (data.items_scraped !== undefined) {
+        logs.push(`<div class="log-line"><span class="log-icon"><i class="fas fa-video"></i></span><span class="log-label">Vidéos collectées:</span><span class="log-value">${data.items_scraped}</span></div>`);
+    }
+    
+    // Status
+    if (data.status) {
+        const statusIcon = data.status === 'finished' ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-spinner fa-spin"></i>';
+        const statusText = data.status === 'finished' ? 'Terminé' : 'En cours';
+        logs.push(`<div class="log-line"><span class="log-icon">${statusIcon}</span><span class="log-label">Statut:</span><span class="log-value">${statusText}</span></div>`);
+    }
+    
+    logPreview.innerHTML = logs.join('');
 }
 
 function hideStatusBar() {
@@ -423,6 +453,66 @@ async function stopScraping() {
     }
 }
 
+async function clearDatabase() {
+    if (!confirm('ATTENTION : Cette action va effacer TOUTES les données (MongoDB + fichiers JSON).\n\nÊtes-vous absolument sûr de vouloir continuer ?')) {
+        return;
+    }
+    
+    // Double confirmation for safety
+    if (!confirm('Dernière confirmation : Toutes les données seront perdues définitivement. Continuer ?')) {
+        return;
+    }
+    
+    const clearBtn = document.getElementById('clear-db-btn');
+    const originalText = clearBtn ? clearBtn.textContent : '';
+    if (clearBtn) {
+        clearBtn.disabled = true;
+        clearBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Effacement...';
+    }
+    
+    try {
+        console.log('[DEBUG] Clearing database...');
+        const response = await fetch('/api/database/clear', { 
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('[DEBUG] Database cleared:', data.details);
+            
+            // Clear the display
+            document.getElementById('videos-container').innerHTML = '';
+            document.getElementById('stats-container').innerHTML = '';
+            
+            // Show success notification
+            const message = `Base de données effacée avec succès!\n` +
+                          `• Runs supprimés: ${data.details.runs_deleted}\n` +
+                          `• Fichiers JSON: ${data.details.json_files}\n` +
+                          `• MongoDB: ${data.details.mongodb ? 'Nettoyée' : 'Non disponible'}`;
+            
+            showNotification(message, 'success');
+            
+            // Reset buttons
+            resetButtons();
+            
+        } else {
+            console.error('[DEBUG] Clear database error:', data.error);
+            showNotification('Erreur: ' + (data.error || 'Échec du nettoyage'), 'error');
+        }
+    } catch (error) {
+        console.error('Erreur lors du nettoyage:', error);
+        showNotification('Erreur lors du nettoyage de la base de données', 'error');
+    } finally {
+        if (clearBtn) {
+            clearBtn.disabled = false;
+            clearBtn.innerHTML = '<i class="fas fa-trash-alt"></i> Effacer la Base';
+        }
+    }
+}
+
 function toggleStatusDetails() {
     const extended = document.getElementById('status-extended');
     const icon = document.getElementById('toggle-icon');
@@ -474,7 +564,13 @@ function renderVideos(videos) {
     if (!container) return;
     
     if (videos.length === 0) {
-        container.innerHTML = '<div class="loading">Aucune vidéo disponible. Lancez une analyse.</div>';
+        container.innerHTML = `
+            <div class="loading" style="text-align: center; padding: 40px;">
+                <div style="font-size: 3em; margin-bottom: 15px; color: #6366f1;"><i class="fas fa-chart-bar"></i></div>
+                <div style="font-size: 1.2em; font-weight: 600; margin-bottom: 10px;">Aucune vidéo disponible</div>
+                <div style="color: #64748b;">Cliquez sur "Démarrer l'Analyse" pour collecter des données</div>
+            </div>
+        `;
         return;
     }
     
