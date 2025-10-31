@@ -139,6 +139,130 @@ class TextFeatures:
             'nb_questions': self.count_question(),
             'pourcentage_majuscules': round(self.caps_ratio() * 100, 2)
         }
+    
+    def calculer_score_psychologique(self, features=None):
+        """
+        Calcule le score psychologique d'un titre YouTube basé sur ses caractéristiques.
+        
+        Formule:
+        --------
+        Le score est une somme pondérée de différentes caractéristiques normalisées,
+        ramenée sur une échelle de 0 à 100.
+        
+        Composantes du score (avec normalisation et poids):
+        
+        1. Longueur du titre (25% du score)
+           - Normalisation: longueur / 100 (plafonnée à 1.0)
+           - Poids: 0.25
+           - Exemple: 60 caractères → 0.60 normalisé → 0.60 × 0.25 = 0.15
+        
+        2. Points d'exclamation (20% du score)
+           - Normalisation: nb_exclamations / 5 (plafonnée à 1.0)
+           - Poids: 0.20
+           - Exemple: 2 exclamations → 0.40 normalisé → 0.40 × 0.20 = 0.08
+        
+        3. Points d'interrogation (15% du score)
+           - Normalisation: nb_questions / 3 (plafonnée à 1.0)
+           - Poids: 0.15
+           - Exemple: 1 question → 0.33 normalisé → 0.33 × 0.15 = 0.05
+        
+        4. Emojis (10% du score)
+           - Normalisation: nb_emojis / 5 (plafonnée à 1.0)
+           - Poids: 0.10
+           - Exemple: 1 emoji → 0.20 normalisé → 0.20 × 0.10 = 0.02
+        
+        5. Ratio de majuscules (20% du score)
+           - Normalisation: pourcentage_majuscules / 100 (déjà entre 0 et 1)
+           - Poids: 0.20
+           - Exemple: 30% majuscules → 0.30 normalisé → 0.30 × 0.20 = 0.06
+        
+        6. Bonus mots clickbait (10% du score)
+           - Valeur binaire: 1.0 si présent, 0.0 sinon
+           - Poids: 0.10
+           - Exemple: présent → 1.0 × 0.10 = 0.10
+        
+        Calcul final:
+        -------------
+        score_normalisé = (composante1 + composante2 + ... + composante6)
+        score_sur_100 = score_normalisé × 100
+        
+        Exemple complet:
+        ----------------
+        Titre: "INCROYABLE! Comment Gagner 1000€ en 24h? 🔥"
+        
+        Features extraites:
+        - longueur: 45 caractères
+        - nb_exclamations: 2
+        - nb_questions: 1
+        - nb_emojis: 1
+        - pourcentage_majuscules: 25%
+        - mots_clickbait: oui (INCROYABLE)
+        
+        Calcul détaillé:
+        - Longueur:     45/100 = 0.45 → 0.45 × 0.25 = 0.1125
+        - Exclamations: 2/5 = 0.40    → 0.40 × 0.20 = 0.0800
+        - Questions:    1/3 = 0.33    → 0.33 × 0.15 = 0.0495
+        - Emojis:       1/5 = 0.20    → 0.20 × 0.10 = 0.0200
+        - Majuscules:   25/100 = 0.25 → 0.25 × 0.20 = 0.0500
+        - Clickbait:    1.0           → 1.00 × 0.10 = 0.1000
+                                        ----------------
+        Score normalisé total:                        0.4120
+        Score final: 0.4120 × 100 = 41.2 ≈ 41
+        
+        Args:
+            features (dict, optional): Dictionnaire de features. Si None, utilise get_all_features()
+        
+        Returns:
+            float: Score psychologique entre 0 et 100
+        """
+        if features is None:
+            features = self.get_all_features()
+        
+        # Extraction des features avec valeurs par défaut
+        longueur = features.get('longueur', 0)
+        nb_exclamations = features.get('nb_exclamations', 0)
+        nb_questions = features.get('nb_questions', 0)
+        nb_emojis = features.get('nb_emojis', 0)
+        pourcentage_majuscules = features.get('pourcentage_majuscules', 0)
+        has_clickbait = features.get('has_clickbait_words', False)
+        
+        # Normalisation des features (ramener sur échelle 0-1)
+        # Chaque feature est divisée par une valeur maximale typique
+        
+        # 1. Longueur (max typique: 100 caractères)
+        longueur_norm = min(longueur / 100.0, 1.0)
+        
+        # 2. Exclamations (max typique: 5)
+        exclamations_norm = min(nb_exclamations / 5.0, 1.0)
+        
+        # 3. Questions (max typique: 3)
+        questions_norm = min(nb_questions / 3.0, 1.0)
+        
+        # 4. Emojis (max typique: 5)
+        emojis_norm = min(nb_emojis / 5.0, 1.0)
+        
+        # 5. Majuscules (déjà en pourcentage 0-100, on divise par 100)
+        majuscules_norm = pourcentage_majuscules / 100.0
+        
+        # 6. Clickbait (booléen → 0 ou 1)
+        clickbait_norm = 1.0 if has_clickbait else 0.0
+        
+        # Calcul du score avec poids pour chaque composante
+        # Total des poids = 1.0 (100%)
+        score_normalise = (
+            longueur_norm * 0.25 +        # 25% - Longueur du titre
+            exclamations_norm * 0.20 +    # 20% - Urgence/Excitation
+            questions_norm * 0.15 +       # 15% - Curiosité
+            emojis_norm * 0.10 +          # 10% - Attrait visuel
+            majuscules_norm * 0.20 +      # 20% - Emphase/Cri
+            clickbait_norm * 0.10         # 10% - Mots accrocheurs
+        )
+        
+        # Conversion sur échelle 0-100
+        score_sur_100 = score_normalise * 100.0
+        
+        # Arrondi à 1 décimale
+        return round(score_sur_100, 1)
 
 
 class MongoClientWrapper:

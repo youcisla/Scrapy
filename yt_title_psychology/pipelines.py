@@ -120,6 +120,15 @@ class MongoDBPipeline:
                 collection_name=self.mongo_collection
             )
             self.mongo_client.connect()
+            
+            # Create unique index on URL field to prevent duplicates and improve performance
+            try:
+                self.mongo_client.collection.create_index('url', unique=True)
+                logger.info("Index unique cree sur le champ 'url'")
+            except Exception as index_error:
+                # Index might already exist, which is fine
+                logger.debug(f"Index sur 'url' deja existant ou erreur: {index_error}")
+            
             logger.info("Pipeline MongoDB initialise avec succes")
         except Exception as e:
             logger.warning(f"MongoDB non accessible : {e}")
