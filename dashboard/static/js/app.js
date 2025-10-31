@@ -344,16 +344,16 @@ function updateLogs(data) {
     
     const logs = [];
     if (data.started_at) {
-        logs.push(`🕒 Démarré: ${new Date(data.started_at).toLocaleTimeString('fr-FR')}`);
+        logs.push(`Démarré: ${new Date(data.started_at).toLocaleTimeString('fr-FR')}`);
     }
     if (data.countries_total) {
-        logs.push(`🌍 Pays: ${data.countries_done || 0}/${data.countries_total}`);
+        logs.push(`Pays: ${data.countries_done || 0}/${data.countries_total}`);
     }
     if (data.current_country) {
-        logs.push(`📍 En cours: ${data.current_country}`);
+        logs.push(`En cours: ${data.current_country}`);
     }
     if (data.items_scraped) {
-        logs.push(`📊 Vidéos collectées: ${data.items_scraped}`);
+        logs.push(`Vidéos collectées: ${data.items_scraped}`);
     }
     
     logPreview.innerHTML = logs.join('<br>');
